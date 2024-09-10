@@ -1,0 +1,107 @@
+---
+title: "Sygdomsbestemmelse"
+output: html_document
+date: "2024-09-06"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+```
+
+Fordi der var uengihed om hvornår man registrerede Botrytis = 1 har vi valgt at skippe disse. Derfor bliver fjernet med "filter" funktionen
+```{r}
+sygdom <- read.csv(header = T, "sygdomsbestemmelse.csv", sep = ";") %>% filter(Botrytis>1)
+sygdom
+```
+
+Der foregår meget her, måske kan noget skæres væk? 
+Ideen er, at gøre data klar til barplot. 
+```{r}
+sygdom_bar <- sygdom %>% group_by(Botrytis, Nummer, Behandling) %>% 
+  summarise(total = n()) %>% #her regnes antallet af observationer sammen for hver gruppe, deineret ovenfor
+  ungroup(Nummer) %>% 
+  pivot_wider(names_from = Nummer, values_from = total, values_fill = 0) %>% #for at kunne få en kollone med data-info vendes tabellen
+  rename(one = "1", two = "2", three = "3", four = "4") %>% 
+  rowwise() %>% 
+  mutate(Mean_Botrytis_Percent = mean(c(one, two, three, four)), # her regnes gennemsnit, SD og det totale antal observationer for hver gruppe
+         SD = sd(c(one, two, three, four)), 
+         Observations = sum(c(one, two, three, four)))
+sygdom_bar
+```
+
+Antallet af observationer for hver kategori af % botrytis
+```{r}
+sygdomshændelser <- ggplot(sygdom_bar, aes(x = Botrytis, 
+                       y = Observations, 
+                       fill = Behandling)) + 
+  geom_col(position = position_dodge2(preserve = "single")) + #behandlinger stå side om side samt bars har samme størrelse
+  scale_x_continuous(breaks = c(0, 5, 10, 15, 20, 25, 30, 35, 40, 50, 60)) +
+  geom_errorbar(aes(ymin=Observations-SD, 
+                    ymax=Observations+SD), 
+                position =position_dodge2(preserve = "single")) + 
+  labs(x = "Botrytis (%)", 
+       y = "Antal observationer", 
+       caption = "Antallet af observationer af botrytis >1% for Tusen vin d. 5 september 2024. Hver bar representere et gennemsnit af 4 rækker. Errorbars viser standard deviation udregnet fra gennemsnittet for de 4 rækker i hver behandling.") +
+  ggtitle("Botrytis hændelser, Tusen vin 05.09.24") +
+  theme_bw() +
+  theme(plot.caption = element_text(size = 5, hjust = 0))
+sygdomshændelser
+```
+
+
+
+For at sammenligne sygdoms hændelserne i hver række, er plottet her splittet for hver behandling.
+```{r}
+ggplot(sygdom, aes(x = Botrytis, 
+                   fill = as.factor(Nummer))) + 
+  geom_bar(position =position_dodge2(preserve = "single")) +
+  facet_wrap(~ Behandling) +
+  theme_bw() + 
+  labs(x = "Botrytis (%)", y = "Antal observationer", fill = "Række nr") +
+  ggtitle("Botrytis hændelser, Tusen vin 05.09.24") 
+
+```
+
+
+Det totale antal af observationer (incidents) >1 
+```{r}
+select(sygdom, Behandling, Botrytis) %>% 
+  group_by(Behandling) %>% 
+  mutate(obs=n()) %>% 
+  ggplot() + geom_bar(aes(x=Behandling, fill=Behandling)) +
+  theme_classic() +
+  labs(y = "Antal observationer") +
+  ggtitle("Observationer >1% botrytis, Tusen vin 05.09.24")
+```
+
+
+ 
+
+
+```{r}
+sygdomtal <- as_tibble(read.csv(header = T, "sygdomtal_above1.csv", sep = ";"))
+sygdomtal
+
+```
+
+Sygdoms-index. Udregnet ved, at tage summen af >1 og divideret med antallet af observationer >1
+```{r}
+sygdomsindex <- ggplot(sygdomtal) +
+  geom_col(aes(x = Behandling, y = Mean, fill = Behandling)) +
+  geom_errorbar(aes(Behandling, ymin=Mean-SD_name, ymax=Mean+SD_name)) +
+  theme_classic() +
+  labs(y="Sygdomsindex") +
+  ggtitle("Sygdomsindex, Tusen vin 05.09.24")
+sygdomsindex
+```
+
+
+
+
